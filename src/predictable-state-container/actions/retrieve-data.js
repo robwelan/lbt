@@ -1,16 +1,32 @@
-const ERROR_TOTAL_AND_COMPLETE = 'ERROR_TOTAL_AND_COMPLETE'
-const HIDE_LOADING_SCREEN = 'HIDE_LOADING_SCREEN'
+import { dateTimeStamp } from '../../helpers/time-stamp'
+// TODO: more on sreen logic
+//const ERROR_TOTAL_AND_COMPLETE = 'ERROR_TOTAL_AND_COMPLETE'
+//const HIDE_LOADING_SCREEN = 'HIDE_LOADING_SCREEN'
 const SHOW_LOADING_SCREEN = 'SHOW_LOADING_SCREEN'
+const LOAD_DATA_LIST = 'LOAD_DATA_LIST'
+const LOAD_DATA_RACE = 'LOAD_DATA_RACE'
+const TOGGLE_DATA_DISPLAY = 'TOGGLE_DATA_DISPLAY'
 
 const api_endpoints = {
 	proxy_gateway: 'https://cors-anywhere.herokuapp.com/',
-	gateway: 'https://www.ladbrokes.com.au',
+	gateway: 'http://www.ladbrokes.com.au',
 	list: '/api/feed/racingList',
 	runners: '/api/feed/eventRunners'
 }
 
-let arrayData = []
+const setDataList = data => ({
+	type: LOAD_DATA_LIST,
+	list: [...data]
+})
 
+const setDataRace = data => ({
+	type: LOAD_DATA_RACE,
+	race: [...data]
+})
+
+const toggleDataDisplay = () => ({
+	type: TOGGLE_DATA_DISPLAY
+})
 const checkStatusCode = async response => {
 	/*  Use this line when debugging if you wish:
 	 *    console.debug('checkStatusCode', response)
@@ -42,26 +58,26 @@ const isObject = val => {
 	return typeof val === 'function' || typeof val === 'object'
 }
 
-const timeAsFormated = () => {
-	let sTimeStamp = ''
-	const d = new Date()
-	const nYear = d.getFullYear()
-	const nMonth = d.getMonth() + 1
-	const sMonth = nMonth < 10 ? `0${nMonth}` : nMonth.toString()
-	const nDay = d.getDate()
-	const sDay = nDay < 10 ? `0${nDay}` : nDay.toString()
-	const nHours = d.getHours()
-	const sHours = nHours < 10 ? `0${nHours}` : nHours.toString()
-	const nMinutes = d.getMinutes()
-	const sMinutes = nMinutes < 10 ? `0${nMinutes}` : nMinutes.toString()
-	const nSeconds = d.getSeconds()
-	const sSeconds = nSeconds < 10 ? `0${nSeconds}` : nSeconds.toString()
+const generateArrayFromSingleObject = o => {
+	let a = []
+	let oT = {}
 
-	sTimeStamp = `${nYear}-${nMonth}-${sDay} ${sHours}:${sMinutes}:${sSeconds}.000000`
-	return sTimeStamp
+	if (isObject(o) === false) {
+		return
+	}
+
+	for (var key in o) {
+		for (var cKey in o[key].competitors) {
+			oT = o[key].competitors[cKey]
+			oT['CompetitorID'] = cKey
+			a.push(oT)
+		}
+	}
+
+	return a
 }
 
-const generateArrayFromObject = o => {
+const generateArrayFromListObject = o => {
 	let a = []
 	let resAll = []
 	let resFive = []
@@ -76,46 +92,38 @@ const generateArrayFromObject = o => {
 		}
 	}
 
-	const sTimeCompare = timeAsFormated()
+	const sTimeCompare = dateTimeStamp()
 
-	resAll = a.filter(o => {
-		if (o.OutcomeDateTime >= sTimeCompare) {
-			if (o.Abandoned === 0) {
-				return o
+	resAll = a
+		.filter(o => {
+			if (o.SuspendDateTime >= sTimeCompare) {
+				if (o.Abandoned === 0) {
+					return o
+				}
 			}
-		}
-	}).sort((a, b) => {
-		// Turn your strings into dates, and then subtract them
-		// to get a value that is either negative, positive, or zero.
-		return new Date(a.OutcomeDateTime) - new Date(b.OutcomeDateTime);
-	})
-	console.log(resAll.length)
-	resFive = resAll.slice(0, 5).sort((a, b) => {
-		// Turn your strings into dates, and then subtract them
-		// to get a value that is either negative, positive, or zero.
-		return new Date(b.OutcomeDateTime) - new Date(a.OutcomeDateTime);
-	})
-	console.log(resFive)
+		})
+		.sort((a, b) => {
+			// Turn your strings into dates, and then subtract them
+			// to get a value that is either negative, positive, or zero.
+			return new Date(a.OutcomeDateTime) - new Date(b.OutcomeDateTime)
+		})
+
+	resFive = resAll.slice(0, 5)
+
+	const arrayData = [...resFive]
 	return arrayData
 }
 
 const fetchMe = request => {
-	request.headers.set('Accept', 'application/json')
-	request.headers.set('Content-Type', 'application/json')
+	//	request.headers.set('Accept', 'application/json')
+	//	request.headers.set('Content-Type', 'application/json')
 
 	const handleSuccess = data => {
 			/*  Use this line when debugging if you wish:
 			 *    console.debug('handleSuccess', data)
 			 */
-			console.log('handleSuccess', data)
-			generateArrayFromObject(data)
-			// if (data.status.toUpperCase() === 'OK' && data.code === 200) {
-			// 	alert('here')
-			// 	return data
-			// } else {
-			// 	console.debug('handleSuccess (error)', err)
-			// 	return window.Promise.reject(data)
-			// }
+			// TODO: check for errors
+			return data
 		},
 		handleFailure = err => {
 			console.debug('handleFailure', err)
@@ -128,6 +136,10 @@ const fetchMe = request => {
 		.then(checkStatusCode)
 		.then(response => response.json())
 		.then(handleSuccess, handleFailure)
+		.catch(err => {
+			// TODO: something better
+			console.debug('abjectFailure', err)
+		})
 }
 
 const startLoading = _ => {
@@ -135,54 +147,50 @@ const startLoading = _ => {
 		type: SHOW_LOADING_SCREEN
 	}
 }
+// TODO: for later
+// const endLoading = _ => {
+// 	return {
+// 		type: HIDE_LOADING_SCREEN
+// 	}
+// }
 
-const endLoading = _ => {
-	return {
-		type: HIDE_LOADING_SCREEN
-	}
-}
-
-const showTheWorstError = () => {
-	return {
-		type: ERROR_TOTAL_AND_COMPLETE
-	}
-}
+// const showTheWorstError = () => {
+// 	return {
+// 		type: ERROR_TOTAL_AND_COMPLETE
+// 	}
+// }
 
 const unresolvableError = dispatch => {
-	setTimeout(() => {
-		dispatch(endLoading())
-		dispatch(showTheWorstError())
-	}, 1500)
+	// TODO: finish
+	//	setTimeout(() => {
+	//		dispatch(endLoading())
+	//		dispatch(showTheWorstError())
+	//	}, 1500)
 }
 
-const retrieveDataAsync = () => {
+const setDataDisplay = () => {
+	return (dispatch, getState) => {
+		dispatch(toggleDataDisplay())
+	}
+}
+const retrieveDataAsync = (sType, sID) => {
 	return (dispatch, getState) => {
 		const onSuccess = data => {
-				let usefulData = data.data
-				console.log('hre', data)
-				// if (engine.init === true) {
-				// 	dispatch(setEngineNode(engine))
-				// 	dispatch(setEngineNodeComplete())
-				// }
+				let usefulData = data
 
-				// if (engine.detail === true) {
-				// 	dispatch(setDetail())
-				// }
-				// if (engine.search === true) {
-				// 	dispatch(setEngineSearch(engine))
-				// }
-				// dispatch(setOffsets(engine))
-				// if (engine.action === 'clear_search') {
-				// 	dispatch(clearEngineSearch())
-				// }
-				// if (engine.action === 'clear_detail') {
-				// 	dispatch(clearEngineDetail())
-				// }
-				// setTimeout(() => {
-				// 	dispatch(useData(usefulData))
-				// 	dispatch(endLoading())
-				// }, 150)
-				console.log(usefulData)
+				if (usefulData === 'undefined') {
+					// TODO: error handling, probably a bad gateway issue
+				}
+				switch (sType) {
+					case 'list':
+						dispatch(setDataList(generateArrayFromListObject(usefulData)))
+						break
+					case 'race':
+						dispatch(setDataRace(generateArrayFromSingleObject(usefulData)))
+						break
+					default:
+					// do nothing: this should have been trapped previously
+				}
 			},
 			onError = err => {
 				console.debug('standard error', err)
@@ -190,28 +198,24 @@ const retrieveDataAsync = () => {
 				unresolvableError(dispatch)
 			}
 
-		let url = `${api_endpoints.proxy_gateway}${api_endpoints.gateway}${api_endpoints.list}`
 		let method = 'GET'
 
-		// if (engine.detail === false) {
-		// 	url = `${gateway_at_marvel}${engine.node.endpoint === '' ? endpoint_at_marvel : engine.node.endpoint}?ts=${
-		// 		ts
-		// 	}&apikey=${marvelKey.public}&hash=${hash}`
-		// 	url = `${url}${sOffset}`
-		// 	if (engine.search === true) {
-		// 		url = `${url}${engine.params}`
-		// 	}
-		// } else {
-		// 	url = `${gateway_at_marvel}${engine.page}?ts=${ts}&apikey=${marvelKey.public}&hash=${hash}`
-		// }
-
-		// const defaultMethod = 'GET'
-
-		// if (engine.node.hasOwnProperty('method')) {
-		// 	method = engine.node.method
-		// } else {
-		// 	method = defaultMethod
-		// }
+		let url = ''
+		switch (sType) {
+			case 'list':
+				url = `${api_endpoints.proxy_gateway}${api_endpoints.gateway}${api_endpoints.list}`
+				break
+			case 'race':
+				if (sID === '') {
+					// TODO: return error
+				}
+				url = `${api_endpoints.proxy_gateway}${api_endpoints.gateway}${
+					api_endpoints.runners
+				}?event_id=${sID.toString()}`
+				break
+			default:
+			// TODO: return an error
+		}
 
 		let request = new Request(url, {
 			method,
@@ -220,7 +224,8 @@ const retrieveDataAsync = () => {
 			headers: new Headers({
 				'Content-Type': 'application/json', //API doesn't like this line...
 				'Accept-Encoding': 'gzip',
-				Accept: '*/*'
+				Accept: '*/*',
+				'X-Requested-With': 'XMLHttpRequest'
 			})
 		})
 
@@ -234,6 +239,5 @@ const retrieveDataAsync = () => {
 	}
 }
 
-export {
-	retrieveDataAsync
-}
+export { retrieveDataAsync, setDataDisplay }
+export { LOAD_DATA_LIST, LOAD_DATA_RACE, TOGGLE_DATA_DISPLAY }
